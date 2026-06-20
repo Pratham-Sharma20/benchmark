@@ -65,3 +65,24 @@ class BenchmarkResponse(BaseModel):
     results: list[ModelBenchmarkStats] = Field(
         description="One entry per model that was benchmarked."
     )
+
+
+# ── /compare ──────────────────────────────────────────────────────────────────
+
+class CompareRequest(BaseModel):
+    """Body accepted by POST /compare."""
+
+    prompt: str = Field(
+        ...,
+        description="The text prompt to run concurrently on all supported models.",
+        examples=["Explain quantum entanglement"],
+    )
+
+
+class CompareResponse(BaseModel):
+    """Body returned by POST /compare — side-by-side results for all models."""
+
+    prompt: str = Field(description="The prompt that was sent to both models.")
+    results: list[InferResponse] = Field(
+        description="One InferResponse per model, returned after concurrent execution."
+    )

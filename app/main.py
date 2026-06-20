@@ -8,6 +8,7 @@ FastAPI application exposing two endpoints:
                      and return aggregate statistics
 """
 
+import asyncio
 import numpy as np
 from fastapi import FastAPI, HTTPException
 
@@ -19,6 +20,8 @@ from app.schemas import (
     BenchmarkRequest,
     BenchmarkResponse,
     ModelBenchmarkStats,
+    CompareRequest,
+    CompareResponse,
 )
 
 # Number of repeated runs used for the benchmark
@@ -116,3 +119,37 @@ def benchmark(body: BenchmarkRequest) -> BenchmarkResponse:
         runs_per_model=BENCHMARK_RUNS,
         results=model_stats,
     )
+
+
+# ── POST /compare ─────────────────────────────────────────────────────────────
+
+@app.post("/compare", response_model=CompareResponse, tags=["inference"])
+async def compare(body: CompareRequest) -> CompareResponse:
+    """
+    Run a prompt **concurrently** on all supported models using
+    `asyncio.gather()` and return side-by-side results.
+
+    Both models execute at the same time (via the default thread-pool executor),
+    so total wall-clock time ≈ max(model_a_latency, model_b_latency) rather
+    than the sum — demonstrating async I/O patterns for high-throughput serving.
+    """
+    loop = asyncio.get_event_loop()
+
+    async def _infer(model_name: str) -> InferResponse:
+        try:
+            result = await loop.run_in_executor(
+                None,  # default ThreadPoolExecutor
+                lambda: run_inference(prompt=body.prompt, model_name=model_name),
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return InferResponse(
+            model=model_name,
+            generated_text=result["generated_text"],
+            latency_ms=result["latency_ms"],
+            token_count=result["token_count"],
+        )
+
+    results = await asyncio.gather(*[_infer(m) for m in SUPPORTED_MODELS])
+
+    return CompareResponse(prompt=body.prompt, results=list(results))

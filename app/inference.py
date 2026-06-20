@@ -23,8 +23,10 @@ def run_inference(prompt: str, model_name: str, max_new_tokens: int = 50) -> dic
     """
     tokenizer, model = get_model(model_name)
 
-    # Encode the prompt into token IDs
+    # Encode the prompt into token IDs and move to the model's device
     inputs = tokenizer(prompt, return_tensors="pt")
+    model_device = next(model.parameters()).device
+    inputs = {k: v.to(model_device) for k, v in inputs.items()}
     input_ids: torch.Tensor = inputs["input_ids"]
     input_len = input_ids.shape[-1]
 

@@ -3,9 +3,16 @@ model_loader.py
 ---------------
 Loads HuggingFace causal language models and caches them in memory so they
 are only downloaded / initialised once per server lifetime.
+
+GPU-aware: automatically uses CUDA if available, otherwise falls back to CPU.
 """
 
+import torch
 from transformers import AutoTokenizer, AutoModelForCausalLM
+
+# Detect the best available device once at import time
+device = "cuda" if torch.cuda.is_available() else "cpu"
+print(f"[model_loader] Using device: {device}")
 
 # Supported model identifiers
 SUPPORTED_MODELS = ["distilgpt2", "facebook/opt-125m"]
@@ -33,6 +40,8 @@ def get_model(model_name: str):
         print(f"[model_loader] Loading '{model_name}' for the first time …")
         tokenizer = AutoTokenizer.from_pretrained(model_name)
         model = AutoModelForCausalLM.from_pretrained(model_name)
+        if device == "cuda":
+            model.to(device)  # only move if there's actually a GPU to move to
         model.eval()  # disable dropout / batch-norm training behaviour
         _cache[model_name] = (tokenizer, model)
         print(f"[model_loader] '{model_name}' loaded and cached.")
